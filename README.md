@@ -76,6 +76,9 @@ If you want to test the refine model, please add `--refine`. For example,
 python test.py --refine --dataset=KITTI --exp_path=pv_raft_finetune --gpus=1 --max_points=8192 --iters=32 --root=./ --weights=./experiments/pv_raft_finetune/checkpoints/best_checkpoint.params
 ```
 
+### Reproduce results
+You can download the checkpoint of refined model [here](https://drive.google.com/file/d/11qt_qkuG-G_OJ53Ml4huQpMZkcmhyriK/view?usp=sharing).
+
 ## Acknowledgement
 Our code is based on [FLOT](https://github.com/valeoai/FLOT). We also refer to [RAFT](https://github.com/princeton-vl/RAFT) and [HPLFlowNet](https://github.com/laoreja/HPLFlowNet).
 
