@@ -1,8 +1,8 @@
 PV-RAFT
 ===
-<img src="PV_RAFT.png" width='600'>
-This repository contains the PyTorch implementation for paper "PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds" (CVPR 2021) \[[arxiv](https://arxiv.org/abs/2012.00987)\]
+This repository contains the PyTorch implementation for paper "PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds" (CVPR 2021)\[[arXiv](https://arxiv.org/abs/2012.00987)\]
 
+<img src="PV_RAFT.png" width='600'>
 
 ## Installation
 
