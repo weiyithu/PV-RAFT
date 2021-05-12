@@ -1,7 +1,7 @@
 PV-RAFT
 ===
-<img src="PV_RAFT.png">
-This repository contains the PyTorch implementation for paper [PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds](https://arxiv.org/abs/2012.00987) (CVPR 2021)
+<img src="PV_RAFT.png" width='600'>
+This repository contains the PyTorch implementation for paper "PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds" (CVPR 2021) \[[arxiv]](https://arxiv.org/abs/2012.00987)\]
 
 
 ## Installation
@@ -53,26 +53,27 @@ You should replace `raw_data_path`, `save_path` and `calib_path` with your own s
 
 ### Train
 ```Shell
-python train.py --exp_path=pvraft --batch_size=2 --gpus=0,1 --num_epochs=20 --iters=8 --root=./
+python train.py --exp_path=pv_raft --batch_size=2 --gpus=0,1 --num_epochs=20 --max_points=8192 --iters=8  --root=./
 ```
-where `exp_path` is the experiment folder name and `root` is the project root path.
+where `exp_path` is the experiment folder name and `root` is the project root path. These 20 epochs take about 53 hours on two RTX 2080 Ti.
 
 If you want to train the refine model, please add `--refine` and specify `--weights` parameter as the directory name of the pre-trained model. For example,
 
 ```Shell
-python train.py --refine --exp_path=pvraft_refine --batch_size=2 --gpus=0,1 --num_epochs=10 --iters=32 --root=./ --weights=pvraft
+python train.py --refine --exp_path=pv_raft_finetune --batch_size=2 --gpus=0,1 --num_epochs=10 --max_points=8192 --iters=32 --root=./ --weights=./experiments/pv_raft/checkpoints/best_checkpoint.params
 ```
+These 10 epochs take about 38 hours on two RTX 2080 Ti.
 
 ### Test
 ```Shell
-python test.py --dataset=KITTI --exp_path=pvraft --gpus=0 --iters=8 --root=./ --weights=./experiments/pvraft/checkpoints/best_checkpoint.params
+python test.py --dataset=KITTI --exp_path=pv_raft --gpus=1 --max_points=8192 --iters=8 --root=./ --weights=./experiments/pv_raft/checkpoints/best_checkpoint.params
 ```
-where `dataset` should be chosen from `FT3D/KITTI`, and `weights` is the path of checkpoint file.
+where `dataset` should be chosen from `FT3D/KITTI`, and `weights` is the absolute path of checkpoint file.
 
 If you want to test the refine model, please add `--refine`. For example,
 
 ```Shell
-python test.py --refine --dataset=KITTI --exp_path=pvraft_refine --gpus=0 --iters=32 --root=./ --weights=./experiments/pvraft_refine/checkpoints/best_checkpoint.params
+python test.py --refine --dataset=KITTI --exp_path=pv_raft_finetune --gpus=1 --max_points=8192 --iters=32 --root=./ --weights=./experiments/pv_raft_finetune/checkpoints/best_checkpoint.params
 ```
 
 ## Acknowledgement
@@ -81,12 +82,11 @@ Our code is based on [FLOT](https://github.com/valeoai/FLOT). We also refer to [
 ## Citation 
 If you find our work useful in your research, please consider citing:
 ```
-@article{wei2020pv,
+@inproceedings{wei2020pv,
   title={PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds},
   author={Wei, Yi and Wang, Ziyi and Rao, Yongming and Lu, Jiwen and Zhou, Jie},
-  journal={arXiv e-prints},
-  pages={arXiv--2012},
-  year={2020}
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  year={2021}
 }
 ```
 
