@@ -86,7 +86,7 @@ Our code is based on [FLOT](https://github.com/valeoai/FLOT). We also refer to [
 If you find our work useful in your research, please consider citing:
 ```
 @inproceedings{wei2020pv,
-  title={PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds},
+  title={{PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds}},
   author={Wei, Yi and Wang, Ziyi and Rao, Yongming and Lu, Jiwen and Zhou, Jie},
   booktitle={CVPR},
   year={2021}
