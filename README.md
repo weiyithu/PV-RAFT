@@ -27,7 +27,7 @@ pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.8.0+cu102
 ### Data Preparation
 We follow [HPLFlowNet](https://web.cs.ucdavis.edu/~yjlee/projects/cvpr2019-HPLFlowNet.pdf) to prepare FlyingThings3D and KITTI datasets. Please refer to [repo](https://github.com/laoreja/HPLFlowNet). Make sure the project structure look like this:
 ```Shell
-RAFT_SceneFlow/
+PV-RAFT/
     data/
         FlyingThings3D_subset_processed_35m/
         kitti_processed/
