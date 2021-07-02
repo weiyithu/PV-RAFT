@@ -16,6 +16,7 @@ This repository contains the PyTorch implementation for paper "PV-RAFT: Point-Vo
 
 ```Shell
 conda create -n pvraft python=3.8
+conda activate pvraft
 conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch
 conda install tqdm tensorboard scipy imageio
 pip install pypng
