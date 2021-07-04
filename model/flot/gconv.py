@@ -4,7 +4,7 @@ import torch
 class SetConv(torch.nn.Module):
     def __init__(self, nb_feat_in, nb_feat_out):
         """
-        Module that performs PointNet++-like convolution on point clouds.
+        Module that performs DGCNN-like convolution on point clouds.
         Parameters
         ----------
         nb_feat_in : int
@@ -24,13 +24,13 @@ class SetConv(torch.nn.Module):
             mid_feature = (nb_feat_out + nb_feat_in) // 2
 
         self.fc1 = torch.nn.Conv2d(nb_feat_in + 3, mid_feature, 1, bias=False)
-        self.bn1 = torch.nn.GroupNorm(8, mid_feature, affine=True)
+        self.gn1 = torch.nn.GroupNorm(8, mid_feature, affine=True)
 
         self.fc2 = torch.nn.Conv1d(mid_feature, nb_feat_out, 1, bias=False)
-        self.bn2 = torch.nn.GroupNorm(8, nb_feat_out, affine=True)
+        self.gn2 = torch.nn.GroupNorm(8, nb_feat_out, affine=True)
 
         self.fc3 = torch.nn.Conv1d(nb_feat_out, nb_feat_out, 1, bias=False)
-        self.bn3 = torch.nn.GroupNorm(8, nb_feat_out, affine=True)
+        self.gn3 = torch.nn.GroupNorm(8, nb_feat_out, affine=True)
 
         self.pool = lambda x: torch.max(x, 2)[0]
         self.lrelu = torch.nn.LeakyReLU(negative_slope=0.1)
@@ -70,14 +70,14 @@ class SetConv(torch.nn.Module):
         # Pointnet++-like convolution
         for func in [
             self.fc1,
-            self.bn1,
+            self.gn1,
             self.lrelu,
             self.pool,
             self.fc2,
-            self.bn2,
+            self.gn2,
             self.lrelu,
             self.fc3,
-            self.bn3,
+            self.gn3,
             self.lrelu,
         ]:
             signal = func(signal)
