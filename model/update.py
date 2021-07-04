@@ -76,14 +76,12 @@ class UpdateBlock(nn.Module):
     def __init__(self, input_dim=128, hidden_dim=64):
         super(UpdateBlock, self).__init__()
         self.motion_encoder = MotionEncoder()
-        # self.gru = ConvGRU(input_dim=input_dim, hidden_dim=hidden_dim)
-        self.rnn = ConvRNN(input_dim=input_dim, hidden_dim=hidden_dim)
+        self.gru = ConvGRU(input_dim=input_dim, hidden_dim=hidden_dim)
         self.flow_head = FlowHead(input_dim=hidden_dim)
 
     def forward(self, net, inp, corr, flow, graph):
         motion_features = self.motion_encoder(flow, corr)
         inp = torch.cat([inp, motion_features], dim=1)  # 128d
-        # net = self.gru(net, inp)
-        net = self.rnn(net, inp)
+        net = self.gru(net, inp)
         delta_flow = self.flow_head(net, graph).transpose(1, 2).contiguous()
         return net, delta_flow
