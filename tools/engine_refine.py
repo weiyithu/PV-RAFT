@@ -104,7 +104,7 @@ class RefineTrainer(object):
 
     def _load_weights(self, test_best=False):
         if self.args.weights is not None:
-            weight_path = os.path.join(self.root, 'experiments', self.args.weights, 'checkpoints', 'best_checkpoint.params')
+            weight_path = os.path.join(self.root, 'experiments', self.args.weights)
             if os.path.exists(weight_path):
                 checkpoint = torch.load(weight_path)
                 self.model.load_state_dict(checkpoint['state_dict'], strict=False)
