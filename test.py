@@ -1,4 +1,5 @@
 import os
+import trimesh
 import logging
 import warnings
 import argparse
@@ -113,6 +114,9 @@ def testing(args):
     outlier_test = []
     acc3dRelax_test = []
     acc3dStrict_test = []
+    pc1_set = []
+    pc2_set = []
+    est_flow_set = []
     test_progress = tqdm(test_dataloader, ncols=150)
     for i, batch_data in enumerate(test_progress):
         batch_data = batch_data.to('cuda')
@@ -124,6 +128,9 @@ def testing(args):
         else:
             loss = compute_loss(est_flow, batch_data)
             epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow, batch_data)
+        pc1_set.append(batch_data['sequence'][0])
+        pc2_set.append(batch_data['sequence'][1])
+        est_flow_set.append(est_flow)
 
         loss_test.append(loss.cpu())
         epe_test.append(epe)
@@ -154,6 +161,31 @@ def testing(args):
             np.array(acc3dRelax_test).mean(),
             np.array(acc3dStrict_test).mean()
         ))
+    
+    # save most error sample
+    idx = np.argsort(-np.array(epe_test))[:10]
+    vis_dir = os.path.join(args.root, 'experiments', args.exp_path, 'vis', args.dataset)
+    os.makedirs(vis_dir, exist_ok=True)
+    color_lib = np.array([[0, 0, 255], [255, 0, 0], [0, 255, 0]])
+    for i in idx:
+        pc1 = pc1_set[i]
+        pc2 = pc2_set[i]
+        pc_pred = pc1 + est_flow_set[i]
+        pc_save = torch.cat([pc1, pc2, pc_pred], dim=0).detach().cpu().numpy()
+        color_save = np.stack([np.expand_dims(color_lib[0], 0).repeat(pc1.shape[1], axis=0),
+                                np.expand_dims(color_lib[1], 0).repeat(pc1.shape[1], axis=0),
+                                np.expand_dims(color_lib[2], 0).repeat(pc1.shape[1], axis=0)])
+        save_ply(pc_save.reshape(-1, 3), color_save.reshape(-1, 3), vis_dir, i)
+    print(idx)
+    logging.info(idx)
+    print(np.array(epe_test)[idx])
+    logging.info(np.array(epe_test)[idx])
+
+def save_ply(pc, colors, dir, idx):
+    path = os.path.join(dir, str(idx) + '.ply')
+    pcd = trimesh.points.PointCloud(vertices=pc, colors=colors)
+    pcd.export(path)
+
 
 
 if __name__ == '__main__':
