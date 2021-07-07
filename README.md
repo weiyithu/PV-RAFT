@@ -61,20 +61,20 @@ where `exp_path` is the experiment folder name and `root` is the project root pa
 If you want to train the refine model, please add `--refine` and specify `--weights` parameter as the directory name of the pre-trained model. For example,
 
 ```Shell
-python train.py --refine --exp_path=pv_raft_finetune --batch_size=2 --gpus=0,1 --num_epochs=10 --max_points=8192 --iters=32 --root=./ --weights=./experiments/pv_raft/checkpoints/best_checkpoint.params
+python train.py --refine --exp_path=pv_raft_finetune --batch_size=2 --gpus=0,1 --num_epochs=10 --max_points=8192 --iters=32 --root=./ --weights=pv_raft
 ```
 These 10 epochs take about 38 hours on two RTX 2080 Ti.
 
 ### Test
 ```Shell
-python test.py --dataset=KITTI --exp_path=pv_raft --gpus=1 --max_points=8192 --iters=8 --root=./ --weights=./experiments/pv_raft/checkpoints/best_checkpoint.params
+python test.py --dataset=KITTI --exp_path=pv_raft --gpus=1 --max_points=8192 --iters=8 --root=./ --weights=pv_raft
 ```
 where `dataset` should be chosen from `FT3D/KITTI`, and `weights` is the absolute path of checkpoint file.
 
 If you want to test the refine model, please add `--refine`. For example,
 
 ```Shell
-python test.py --refine --dataset=KITTI --exp_path=pv_raft_finetune --gpus=1 --max_points=8192 --iters=32 --root=./ --weights=./experiments/pv_raft_finetune/checkpoints/best_checkpoint.params
+python test.py --refine --dataset=KITTI --exp_path=pv_raft_finetune --gpus=1 --max_points=8192 --iters=32 --root=./ --weights=pv_raft
 ```
 
 ### Reproduce results
