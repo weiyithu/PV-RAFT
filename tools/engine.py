@@ -100,8 +100,7 @@ class Trainer(object):
     def _load_weights(self, test_best=False):
         if self.args.weights is not None:
             if os.path.exists(self.args.weights):
-                weight_path = os.path.join(self.root, 'experiments', self.args.weights)
-                checkpoint = torch.load(weight_path)
+                checkpoint = torch.load(self.args.weights)
                 self.begin_epoch = checkpoint['epoch']
                 self.model.load_state_dict(checkpoint['state_dict'])
                 print("Load checkpoint from {}".format(weight_path))
