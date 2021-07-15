@@ -194,7 +194,7 @@ class CorrBlock(nn.Module):
                     corr_cnt[:, :, bit] = corr_cnt[:, :, bit] + corr_cnt[:, :, cnt + num]
             voxel_corr = corr_add[:, :, :num] / torch.clamp(corr_cnt[:, :, :num], 1, n_p)
             if voxel_corr.shape[-1] != self.num_base:
-                repair = torch.zeros([b, n_p, self.num_base - corr.shape[-1]], device=coords.device)
+                repair = torch.zeros([b, n_p, self.num_base - voxel_corr.shape[-1]], device=coords.device)
                 voxel_corr = torch.cat([voxel_corr, repair], dim=-1)
             voxel_xyz = (base.cuda() * r).unsqueeze(dim=0).unsqueeze(dim=1).expand(b, n1, num, 3) + offset_r.transpose(2, 3).contiguous()
             voxel_feature = self.voxel_conv(torch.cat([voxel_corr.unsqueeze(dim=1), voxel_xyz.permute(0, 3, 1, 2).contiguous()], dim=1))
