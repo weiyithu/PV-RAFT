@@ -15,7 +15,6 @@ class CorrBlock(nn.Module):
         self.truncate_k = truncate_k
         self.num_levels = num_levels
         self.resolution = resolution  # local resolution
-        self.num_base = 7
         self.base_scale = base_scale  # search (base_sclae * resolution)^3 cube
         self.offset_conv = nn.Sequential(
             nn.Conv1d(self.truncate_k * 4, 512, 1),
@@ -24,8 +23,7 @@ class CorrBlock(nn.Module):
             nn.Conv1d(512, 128, 1),
             nn.GroupNorm(8, 128),
             nn.PReLU(),
-            nn.Conv1d(128, self.num_base * 3, 1),
-            nn.Sigmoid()
+            nn.Conv1d(128, 81, 1),
         )
 
         self.voxel_conv = nn.Sequential(
@@ -35,7 +33,7 @@ class CorrBlock(nn.Module):
             nn.Conv2d(32, 1, 1)
         )
         self.voxel_out = nn.Sequential(
-            nn.Conv1d(self.num_base * self.num_levels, 128, 1),
+            nn.Conv1d((self.resolution ** 3) * self.num_levels, 128, 1),
             nn.GroupNorm(8, 128),
             nn.PReLU(),
             nn.Conv1d(128, 64, 1)
@@ -72,9 +70,9 @@ class CorrBlock(nn.Module):
     def get_voxel_feature(self, coords):
         b, n_p, _ = coords.size()
         corr_feature = []
-        base = self.get_base7()
+        base = self.get_base()
         b, n1, n2, _ = self.truncate_xyz2.shape
-        num = self.num_base
+        num = self.resolution ** 3
 
         offset_input = torch.cat([self.truncate_xyz2 - coords.unsqueeze(dim=-2), 
                                   self.truncated_corr.unsqueeze(dim=-1)], dim=-1)
@@ -85,7 +83,6 @@ class CorrBlock(nn.Module):
         for i in range(self.num_levels):
             with torch.no_grad():
                 r = self.base_scale * (2 ** i)
-                offset_r = (offset - 0.5) * r
 
                 # start = time.time()
                 # dis_voxel = torch.round((self.truncate_xyz2 - coords.unsqueeze(dim=-2)) / r)            # B, 8192, 512, 3
@@ -152,10 +149,12 @@ class CorrBlock(nn.Module):
                 start = time.time()
 
                 for k in range(num):
-                    dis_voxel = torch.round((self.truncate_xyz2 - (coords + offset_r[:, :, :, k]).unsqueeze(dim=-2)) / r)
+                    dis_voxel = torch.round((self.truncate_xyz2 - (coords + offset[:, :, :, k]).unsqueeze(dim=-2)) / r)
                     valid_scatter = (dis_voxel == base[k].to(dis_voxel.device)).all(dim=-1)   # B, 8192, 512
                     idx_scatter[valid_scatter] += (2 ** k)
                     idx_scatter_bi[valid_scatter] += torch.zeros_like(idx_scatter_bi[valid_scatter]).index_fill_(1, torch.tensor(k).cuda(), 1)
+                time1 = time.time() - start
+                start = time.time()
 
                 idx_unique = torch.unique(idx_scatter)
                 root_list = []
@@ -171,6 +170,8 @@ class CorrBlock(nn.Module):
                         cube_idx_scatter[idx_select] = len(root_list) + num
                         root_list.append(root)
                 cube_idx_scatter = cube_idx_scatter.type(torch.int64).detach()
+                time2 = time.time() - start
+                start = time.time()
 
             # corr_add = scatter_add(self.truncated_corr * valid_scatter, cube_idx_scatter)               # B, 8192, 27
             # corr_cnt = torch.clamp(scatter_add(self.ones_matrix * valid_scatter, cube_idx_scatter), 1, n_p)
@@ -188,17 +189,18 @@ class CorrBlock(nn.Module):
 
             corr_add = scatter_add(self.truncated_corr, cube_idx_scatter)
             corr_cnt = scatter_add(self.ones_matrix, cube_idx_scatter)
+            time3 = time.time() - start
+            start = time.time()
             for cnt, root in enumerate(root_list):
                 for bit in torch.where(root == 1)[0]:
                     corr_add[:, :, bit] = corr_add[:, :, bit] + corr_add[:, :, cnt + num]
                     corr_cnt[:, :, bit] = corr_cnt[:, :, bit] + corr_cnt[:, :, cnt + num]
             voxel_corr = corr_add[:, :, :num] / torch.clamp(corr_cnt[:, :, :num], 1, n_p)
-            if voxel_corr.shape[-1] != self.num_base:
-                repair = torch.zeros([b, n_p, self.num_base - corr.shape[-1]], device=coords.device)
-                voxel_corr = torch.cat([voxel_corr, repair], dim=-1)
-            voxel_xyz = (base.cuda() * r).unsqueeze(dim=0).unsqueeze(dim=1).expand(b, n1, num, 3) + offset_r.transpose(2, 3).contiguous()
+            voxel_xyz = (base.cuda() * r).unsqueeze(dim=0).unsqueeze(dim=1).expand(b, n1, num, 3) + offset.transpose(2, 3).contiguous()
             voxel_feature = self.voxel_conv(torch.cat([voxel_corr.unsqueeze(dim=1), voxel_xyz.permute(0, 3, 1, 2).contiguous()], dim=1))
             corr = voxel_feature.squeeze(dim=1)
+            time4 = time.time() - start
+            start = time.time()
             corr_feature.append(corr.transpose(1, 2).contiguous())
 
         return self.voxel_out(torch.cat(corr_feature, dim=1))
@@ -240,19 +242,8 @@ class CorrBlock(nn.Module):
                 quotient = quotient // self.resolution
         return base
 
-    def get_base7(self):
-        base = torch.tensor([[0, 0, 0],
-                             [-1, 0, 0],
-                             [1, 0, 0],
-                             [0, -1, 0],
-                             [0, 1, 0],
-                             [0, 0, -1],
-                             [0, 0, 1]])
-        return base
-
     def get_root(self, idx):
-        # num = self.resolution ** 3
-        num = 7
+        num = self.resolution ** 3
         quotient = idx
         root = np.zeros((num,))
         for i in range(num):
