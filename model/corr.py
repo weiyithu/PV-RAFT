@@ -24,8 +24,7 @@ class CorrBlock(nn.Module):
             nn.Conv1d(512, 128, 1),
             nn.GroupNorm(8, 128),
             nn.PReLU(),
-            nn.Conv1d(128, self.num_base * 3, 1),
-            nn.Sigmoid()
+            nn.Conv1d(128, self.num_base * 3, 1)
         )
 
         self.voxel_conv = nn.Sequential(
@@ -85,7 +84,7 @@ class CorrBlock(nn.Module):
         for i in range(self.num_levels):
             with torch.no_grad():
                 r = self.base_scale * (2 ** i)
-                offset_r = (offset - 0.5) * r
+                offset_r = offset * r
 
                 # start = time.time()
                 # dis_voxel = torch.round((self.truncate_xyz2 - coords.unsqueeze(dim=-2)) / r)            # B, 8192, 512, 3
@@ -149,7 +148,6 @@ class CorrBlock(nn.Module):
                 idx_scatter = torch.zeros((b, n1, n2), device=coords.device)
                 idx_scatter_bi = torch.zeros((b, n1, n2, num), device=coords.device)
                 cube_idx_scatter = torch.zeros((b, n1, n2), device=coords.device)
-                start = time.time()
 
                 for k in range(num):
                     dis_voxel = torch.round((self.truncate_xyz2 - (coords + offset_r[:, :, :, k]).unsqueeze(dim=-2)) / r)
