@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset
+from datasets.sparse_voxelizer import SparseVoxelizer
 
 
 class Batch:
@@ -18,7 +19,7 @@ class Batch:
 
         self.data = {}
         batch_size = len(batch)
-        for key in ["sequence", "ground_truth"]:
+        for key in ["sequence", "ground_truth", "idx_inverse", "sparse"]:
             self.data[key] = []
             for ind_seq in range(2):
                 tmp = []
@@ -67,7 +68,7 @@ class Batch:
 
 
 class SceneFlowDataset(Dataset):
-    def __init__(self, nb_points):
+    def __init__(self, nb_points, voxel_size=0.05):
         """
         Abstract constructor for scene flow datasets.
 
@@ -91,6 +92,7 @@ class SceneFlowDataset(Dataset):
 
         super(SceneFlowDataset, self).__init__()
         self.nb_points = nb_points
+        self.sparse_voxelizer = SparseVoxelizer(voxel_size=voxel_size)
 
     def __getitem__(self, idx):
         sequence, ground_truth = self.to_torch(
@@ -107,6 +109,13 @@ class SceneFlowDataset(Dataset):
                 data = {"sequence": sequence, "ground_truth": ground_truth}
                 if data['sequence'][0].shape[1] == self.nb_points and data['sequence'][1].shape[1] == self.nb_points:
                     break
+        coord1 = data['sequence'][0].squeeze(dim=0)
+        coord2 = data['sequence'][1].squeeze(dim=0)
+        coord_min = torch.cat([coord1, coord2], dim=0).min(dim=0, keepdim=True)[0]
+        sparse_pc1, idx_inverse_pc1 = self.sparse_voxelizer.voxelize(coord1 - coord_min)
+        sparse_pc2, idx_inverse_pc2 = self.sparse_voxelizer.voxelize(coord2 - coord_min)
+        data['sparse'] = [sparse_pc1, sparse_pc2]
+        data['idx_inverse'] = [idx_inverse_pc1, idx_inverse_pc2]
         return data
 
     def to_torch(self, sequence, ground_truth):

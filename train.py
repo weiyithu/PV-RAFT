@@ -7,65 +7,29 @@ from tools.engine_refine import RefineTrainer
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Training Argument')
-    parser.add_argument('--root',
-                        help='workspace path',
-                        default='',
-                        type=str)
-    parser.add_argument('--exp_path',
-                        help='specified experiment log path',
-                        default=None,
-                        type=str)
-    parser.add_argument('--dataset',
-                        help="choose dataset from 'FT3D' and 'KITTI'",
-                        default='FT3D',
-                        type=str)
-    parser.add_argument('--max_points',
-                        help='maximum number of points sampled from a point cloud',
-                        default=8192,
-                        type=int)
-    parser.add_argument('--corr_levels',
-                        help='number of correlation pyramid levels',
-                        default=3,
-                        type=int)
-    parser.add_argument('--base_scales',
-                        help='voxelize base scale',
-                        default=0.25,
-                        type=float)
-    parser.add_argument('--truncate_k',
-                        help='value of truncate_k in corr block',
-                        default=512,
-                        type=int)
-    parser.add_argument('--iters',
-                        help='number of iterations in GRU module',
-                        default=8,
-                        type=int)
-    parser.add_argument('--gamma',
-                        help='exponential weights',
-                        default=0.8,
-                        type=float)
-    parser.add_argument('--batch_size',
-                        help='number of samples in a mini-batch',
-                        default=1,
-                        type=int)
-    parser.add_argument('--gpus',
-                        help='gpus that used for training',
-                        default='0',
-                        type=str)
-    parser.add_argument('--num_epochs',
-                        help='number of epochs for training',
-                        default=20,
-                        type=int)
-    parser.add_argument('--weights',
-                        help='checkpoint weights to be loaded',
-                        default=None,
-                        type=str)
-    parser.add_argument('--checkpoint_interval',
-                        help='save checkpoint every N epoch',
-                        default=5,
-                        type=int)
-    parser.add_argument('--refine',
-                        help='refine mode',
-                        action='store_true')
+    parser.add_argument('--root', default='', type=str)
+    parser.add_argument('--exp_path', default=None, type=str)
+    parser.add_argument('--dataset', default='FT3D', type=str)
+    parser.add_argument('--max_points', default=8192, type=int)
+    parser.add_argument('--voxel_size', default=0.05, type=float)
+
+    parser.add_argument('--corr_levels', default=3, type=int)
+    parser.add_argument('--base_scales', default=0.25, type=float)
+    parser.add_argument('--truncate_k', default=512, type=int)
+    parser.add_argument('--iters', default=8, type=int)
+    parser.add_argument('--gamma', default=0.8, type=float)
+
+    parser.add_argument('--bn_momentum', default=0.02, type=float)
+    parser.add_argument('--conv1_kernel_size', default=5, type=int)
+    parser.add_argument('--nonlinearity', default='ReLU', type=str)
+
+    parser.add_argument('--batch_size', default=1, type=int)
+    parser.add_argument('--gpus', default='0', type=str)
+    parser.add_argument('--num_epochs', default=20, type=int)
+    parser.add_argument('--weights', default=None, type=str)
+    parser.add_argument('--checkpoint_interval', default=5, type=int)
+    parser.add_argument('--refine', action='store_true')
+
     args = parser.parse_args()
 
     return args

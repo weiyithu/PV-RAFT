@@ -34,9 +34,9 @@ class Trainer(object):
         if self.dataset == 'FT3D':
             folder = 'FlyingThings3D_subset_processed_35m'
             dataset_path = os.path.join(self.root, 'data', folder)
-            self.train_dataset = FT3D(root_dir=dataset_path, nb_points=args.max_points, mode='train')
-            self.val_dataset = FT3D(root_dir=dataset_path, nb_points=args.max_points, mode='val')
-            self.test_dataset = FT3D(root_dir=dataset_path, nb_points=args.max_points, mode='test')
+            self.train_dataset = FT3D(root_dir=dataset_path, nb_points=args.max_points, mode='train', voxel_size=args.voxel_size)
+            self.val_dataset = FT3D(root_dir=dataset_path, nb_points=args.max_points, mode='val', voxel_size=args.voxel_size)
+            self.test_dataset = FT3D(root_dir=dataset_path, nb_points=args.max_points, mode='test', voxel_size=args.voxel_size)
         else:
             raise NotImplementedError
 
@@ -138,7 +138,7 @@ class Trainer(object):
             #     est_flow = self.model(batch_data["sequence"], num_iters=self.args.iters)
             # print(prof.key_averages().table(sort_by="self_cuda_time_total"))
             # exit(0)
-            est_flow = self.model(batch_data["sequence"], num_iters=self.args.iters)
+            est_flow = self.model(batch_data, num_iters=self.args.iters)
             loss = sequence_loss(est_flow, batch_data, gamma=self.args.gamma)
             loss.backward()
             self.optimizer.step()

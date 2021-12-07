@@ -5,7 +5,7 @@ from .generic import SceneFlowDataset
 
 
 class FT3D(SceneFlowDataset):
-    def __init__(self, root_dir, nb_points, mode):
+    def __init__(self, root_dir, nb_points, mode, voxel_size=0.05):
         """
         Construct the FlyingThing3D datatset as in:
         Gu, X., Wang, Y., Wu, C., Lee, Y.J., Wang, P., HPLFlowNet: Hierarchical
@@ -28,7 +28,7 @@ class FT3D(SceneFlowDataset):
 
         """
 
-        super(FT3D, self).__init__(nb_points)
+        super(FT3D, self).__init__(nb_points, voxel_size)
 
         self.mode = mode
         self.root_dir = root_dir
