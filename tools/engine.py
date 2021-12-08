@@ -130,6 +130,8 @@ class Trainer(object):
 
         train_progress = tqdm(self.train_dataloader, ncols=150)
         for i, batch_data in enumerate(train_progress):
+            if i > 10:
+                break
             global_step = epoch * len(self.train_dataloader) + i
             batch_data = batch_data.to(self.device[0])
 
@@ -196,7 +198,7 @@ class Trainer(object):
             batch_data = batch_data.to(self.device[0])
 
             with torch.no_grad():
-                est_flow = self.model(batch_data["sequence"], 32)
+                est_flow = self.model(batch_data, 32)
 
             loss = sequence_loss(est_flow, batch_data, gamma=self.args.gamma)
             epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow[-1], batch_data)
