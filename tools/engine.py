@@ -130,8 +130,6 @@ class Trainer(object):
 
         train_progress = tqdm(self.train_dataloader, ncols=150)
         for i, batch_data in enumerate(train_progress):
-            if i > 10:
-                break
             global_step = epoch * len(self.train_dataloader) + i
             batch_data = batch_data.to(self.device[0])
 
