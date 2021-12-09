@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from MinkowskiEngine import SparseTensor
 from model.extractor import FlotEncoder
-from model.minkowski.res16unet import Res16UNet18
+from model.minkowski.res16unet import Res16UNet34C
 from model.corr import CorrBlock
 from model.update import UpdateBlock
 from model.refine import FlotRefine
@@ -14,7 +14,7 @@ class RSF(nn.Module):
         super(RSF, self).__init__()
         self.hidden_dim = 64
         self.context_dim = 64
-        self.feature_extractor = Res16UNet18(in_channels=3, out_channels=512, config=args)
+        self.feature_extractor = Res16UNet34C(in_channels=3, out_channels=512, config=args)
         self.context_extractor = FlotEncoder()
         self.corr_block = CorrBlock(num_levels=args.corr_levels, base_scale=args.base_scales,
                                     resolution=3, truncate_k=args.truncate_k)
