@@ -24,13 +24,18 @@ class RSF(nn.Module):
     def forward(self, p, num_iters=12):
         # feature extraction
         [xyz1, xyz2] = p['sequence']
-        sinput_pc1 = SparseTensor(p['sparse'][0].type(torch.float32), torch.cat([torch.zeros((p['sparse'][0].shape[0], 1), device=xyz1.device), p['sparse'][0]], dim=1), device=xyz1.device)
-        sinput_pc2 = SparseTensor(p['sparse'][1].type(torch.float32), torch.cat([torch.zeros((p['sparse'][1].shape[0], 1), device=xyz1.device), p['sparse'][1]], dim=1), device=xyz2.device)
+        sinput_pc1 = SparseTensor(p['sparse'][0][:, 1:].type(torch.float32), p['sparse'][0].type(torch.int), device=xyz1.device)
+        sinput_pc2 = SparseTensor(p['sparse'][1][:, 1:].type(torch.float32), p['sparse'][1].type(torch.int), device=xyz2.device)
         fmap1_sparse = self.feature_extractor(sinput_pc1)
         fmap2_sparse = self.feature_extractor(sinput_pc2)
 
-        fmap1 = fmap1_sparse.F[p['idx_inverse'][0], :].transpose(0, 1).contiguous().unsqueeze(dim=0)
-        fmap2 = fmap2_sparse.F[p['idx_inverse'][1], :].transpose(0, 1).contiguous().unsqueeze(dim=0)
+        fmap1 = []
+        fmap2 = []
+        for b in sinput_pc1.C[:, 0].unique():
+            fmap1.append(fmap1_sparse.F[fmap1_sparse.C[:, 0] == b][p['idx_inverse'][0][b], :].transpose(0, 1).contiguous().unsqueeze(dim=0))
+            fmap2.append(fmap2_sparse.F[fmap2_sparse.C[:, 0] == b][p['idx_inverse'][1][b], :].transpose(0, 1).contiguous().unsqueeze(dim=0))
+        fmap1 = torch.cat(fmap1, dim=0)
+        fmap2 = torch.cat(fmap2, dim=0)
 
         # correlation matrix
         self.corr_block.init_module(fmap1, fmap2, xyz2)

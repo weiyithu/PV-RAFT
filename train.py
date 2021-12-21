@@ -1,8 +1,31 @@
 import os
 import argparse
+import MinkowskiEngine as ME
+
+import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tools.engine import Trainer
 from tools.engine_refine import RefineTrainer
+from model.RAFTSceneFlow import RSF
+from model.RAFTSceneFlowRefine import RSF_refine
+
+
+def synchronize():
+    """
+    Helper function to synchronize (barrier) among all processes when
+    using distributed training
+    """
+    if not dist.is_available():
+        return
+    if not dist.is_initialized():
+        return
+    world_size = dist.get_world_size()
+    if world_size == 1:
+        return
+    dist.barrier()
 
 
 def parse_args():
@@ -11,7 +34,7 @@ def parse_args():
     parser.add_argument('--exp_path', default=None, type=str)
     parser.add_argument('--dataset', default='FT3D', type=str)
     parser.add_argument('--max_points', default=8192, type=int)
-    parser.add_argument('--voxel_size', default=0.05, type=float)
+    parser.add_argument('--voxel_size', default=0.08, type=float)
 
     parser.add_argument('--corr_levels', default=3, type=int)
     parser.add_argument('--base_scales', default=0.25, type=float)
@@ -30,17 +53,44 @@ def parse_args():
     parser.add_argument('--checkpoint_interval', default=5, type=int)
     parser.add_argument('--refine', action='store_true')
 
+    parser.add_argument('--local_rank', default=0, type=int)
+
     args = parser.parse_args()
 
     return args
 
 
 def main(args):
-    print(args)
+    num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
+    distributed = num_gpus > 0
+    if distributed:
+        torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(
+            backend="nccl", init_method="env://"
+        )
+        synchronize()
+
     if not args.refine:
-        trainer = Trainer(args)
+        model = RSF(args)
     else:
-        trainer = RefineTrainer(args)
+        model = RSF_refine(args)
+        model.feature_extractor.requires_grad = False
+        model.context_extractor.requires_grad = False
+        model.corr_block.requires_grad = False
+        model.update_block.requires_grad = False
+    
+    model = model.cuda()
+
+    ddp_model = DDP(
+        model, device_ids=[args.local_rank], output_device=args.local_rank,
+        broadcast_buffers=False, find_unused_parameters=True
+    )
+    ddp_model = ME.MinkowskiSyncBatchNorm.convert_sync_batchnorm(ddp_model)
+
+    if not args.refine:
+        trainer = Trainer(args, ddp_model)
+    else:
+        trainer = RefineTrainer(args, ddp_model)
 
     for epoch in range(trainer.begin_epoch, args.num_epochs + 1):
         trainer.training(epoch)
@@ -50,5 +100,7 @@ def main(args):
 
 if __name__ == '__main__':
     args = parse_args()
+    if args.local_rank == 0:
+        print(args)
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
     main(args)

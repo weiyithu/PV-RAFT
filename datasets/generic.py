@@ -24,7 +24,12 @@ class Batch:
             for ind_seq in range(2):
                 tmp = []
                 for ind_batch in range(batch_size):
-                    tmp.append(batch[ind_batch][key][ind_seq])
+                    batch_key_seq = batch[ind_batch][key][ind_seq]
+                    if key == "sparse":
+                        batch_key_seq = torch.cat([torch.ones((batch_key_seq.shape[0], 1)) * ind_batch, batch_key_seq], dim=1)
+                    elif key == 'idx_inverse':
+                        batch_key_seq = batch_key_seq.unsqueeze(dim=0)
+                    tmp.append(batch_key_seq)
                 self.data[key].append(torch.cat(tmp, 0))
 
     def __getitem__(self, item):

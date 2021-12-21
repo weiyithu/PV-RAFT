@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 import warnings
 import numpy as np
@@ -14,14 +15,14 @@ from torch.utils.tensorboard import SummaryWriter
 
 from datasets.generic import Batch
 from datasets.flyingthings3d_hplflownet import FT3D
-from model.RAFTSceneFlowRefine import RSF_refine
+from datasets.dataloader import DistributedInfSampler
 from tools.loss import compute_loss
 from tools.metric import compute_epe_train, compute_epe
-from tools.utils import save_checkpoint
+from tools.utils import save_checkpoint, AverageMeter
 
 
 class RefineTrainer(object):
-    def __init__(self, args, mode='Train'):
+    def __init__(self, args, model, mode='Train'):
         self.args = args
         self.root = args.root
         self.exp_path = args.exp_path
@@ -29,7 +30,8 @@ class RefineTrainer(object):
         self.log_dir = None
         self.summary_writer = None
 
-        self._log_init(mode)
+        if args.local_rank == 0:
+            self._log_init(mode)
 
         if self.dataset == 'FT3D':
             folder = 'FlyingThings3D_subset_processed_35m'
@@ -40,24 +42,17 @@ class RefineTrainer(object):
         else:
             raise NotImplementedError
 
-        self.train_dataloader = DataLoader(self.train_dataset, args.batch_size, shuffle=True,
-                                           num_workers=8, collate_fn=Batch, drop_last=True)
-        self.val_dataloader = DataLoader(self.val_dataset, 1, shuffle=False, num_workers=8,
-                                         collate_fn=Batch, drop_last=False)
-        self.test_dataloader = DataLoader(self.test_dataset, 1, shuffle=False, num_workers=8,
-                                          collate_fn=Batch, drop_last=False)
+        self.train_dataloader = DataLoader(dataset=self.train_dataset, batch_size=int(args.batch_size // len(args.gpus.split(','))),
+                                           num_workers=8, collate_fn=Batch, drop_last=True,
+                                           sampler=DistributedInfSampler(self.train_dataset, shuffle=True))
+        self.val_dataloader = DataLoader(dataset=self.val_dataset, batch_size=1, num_workers=8,
+                                         collate_fn=Batch, drop_last=False,
+                                         sampler=DistributedInfSampler(self.val_dataset, shuffle=False))
+        self.test_dataloader = DataLoader(dataset=self.test_dataset, batch_size=1, num_workers=8,
+                                         collate_fn=Batch, drop_last=False,
+                                         sampler=DistributedInfSampler(self.test_dataset, shuffle=False))
 
-        model = RSF_refine(args)
-        model.feature_extractor.requires_grad = False
-        model.context_extractor.requires_grad = False
-        model.corr_block.requires_grad = False
-        model.update_block.requires_grad = False
-
-        if torch.cuda.device_count() > 1:
-            self.device = list(range(torch.cuda.device_count()))
-        else:
-            self.device = ['cuda'] if torch.cuda.is_available() else ['cpu']
-        self.model = model.to(self.device[0])
+        self.model = model
 
         self.optimizer = Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=1e-3)
         self.lr_scheduler = CosineAnnealingLR(self.optimizer, T_max=args.num_epochs*len(self.train_dataset))
@@ -87,6 +82,9 @@ class RefineTrainer(object):
         if not os.path.exists(log_dir):
             os.mkdir(log_dir)
         log_name = mode + '_' + self.dataset + '.log'
+        # Remove all handlers associated with the root logger object.
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
         logging.basicConfig(
             filename=os.path.join(log_dir, log_name),
             filemode='w',
@@ -126,14 +124,18 @@ class RefineTrainer(object):
 
     def training(self, epoch):
         self.model.train()
-        if self.summary_writer is None:
+        iter_time = AverageMeter()
+        if self.summary_writer is None and self.args.local_rank == 0:
             self.summary_writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
 
         loss_train = []
         epe_train = []
 
-        train_progress = tqdm(self.train_dataloader, ncols=150)
-        for i, batch_data in enumerate(train_progress):
+        end = time.time()
+        max_iter = len(self.train_dataloader)
+        data_iter = self.train_dataloader.__iter__()
+        for i in range(max_iter):
+            batch_data = data_iter.next()
             global_step = epoch * len(self.train_dataloader) + i
             batch_data = batch_data.to(self.device[0])
 
@@ -147,36 +149,51 @@ class RefineTrainer(object):
             loss_train.append(loss.detach().cpu())
             epe_train.append(epe.detach().cpu())
 
-            self.summary_writer.add_scalar(
-                tag='Train/Loss',
-                scalar_value=np.array(loss_train).mean(),
-                global_step=global_step
-            )
-            self.summary_writer.add_scalar(
-                tag='Train/EPE',
-                scalar_value=np.array(epe_train).mean(),
-                global_step=global_step
-            )
+            remain_iter = max_iter - i
+            iter_time.update(time.time() - end)
+            end = time.time()
+            running_time = iter_time.sum
+            t_mr, t_sr = divmod(running_time, 60)
+            t_hr, t_mr = divmod(t_mr, 60)
+            running_time = '{:02d}:{:02d}:{:02d}'.format(int(t_hr), int(t_mr), int(t_sr))
+            remain_time = remain_iter * iter_time.avg
+            t_m, t_s = divmod(remain_time, 60)
+            t_h, t_m = divmod(t_m, 60)
+            remain_time = '{:02d}:{:02d}:{:02d}'.format(int(t_h), int(t_m), int(t_s))
 
-            train_progress.set_description(
-                'Train Epoch {}: Loss: {:.5f} EPE: {:.5f}'.format(
-                    epoch,
-                    np.array(loss_train).mean(),
-                    np.array(epe_train).mean()
+            if self.args.local_rank == 0:
+                self.summary_writer.add_scalar(
+                    tag='Train/Loss',
+                    scalar_value=np.array(loss_train).mean(),
+                    global_step=global_step
                 )
-            )
+                self.summary_writer.add_scalar(
+                    tag='Train/EPE',
+                    scalar_value=np.array(epe_train).mean(),
+                    global_step=global_step
+                )
+
+            if self.args.local_rank == 0:
+                print('Train Epoch {}: Iter: {}/{} Loss: {:.5f} EPE: {:.5f} Running: {} Remain: {}'.format(
+                    epoch,
+                    i, max_iter,
+                    np.array(loss_train).mean(),
+                    np.array(epe_train).mean(),
+                    running_time, remain_time)
+                )
 
         self.lr_scheduler.step()
-        save_checkpoint(self.model, self.args, epoch, 'train')
-        logging.info('Train Epoch {}: Loss: {:.5f} EPE: {:.5f}'.format(
-                    epoch,
-                    np.array(loss_train).mean(),
-                    np.array(epe_train).mean()
-                ))
+        if self.args.local_rank == 0:
+            save_checkpoint(self.model, self.args, epoch, 'train')
+            logging.info('Train Epoch {}: Loss: {:.5f} EPE: {:.5f}'.format(
+                        epoch,
+                        np.array(loss_train).mean(),
+                        np.array(epe_train).mean()
+                    ))
 
     def val_test(self, epoch=0, mode='val'):
         self.model.eval()
-
+        iter_time = AverageMeter()
         loss_run = []
         epe_run = []
         outlier_run = []
@@ -190,8 +207,11 @@ class RefineTrainer(object):
             run_dataloader = self.test_dataloader
             run_logstr = 'Test'
             self._load_weights(test_best=True)
-        run_progress = tqdm(run_dataloader, ncols=150)
-        for i, batch_data in enumerate(run_progress):
+        end = time.time()
+        max_iter = len(run_dataloader)
+        data_iter = run_dataloader.__iter__()
+        for i in range(max_iter):
+            batch_data = data_iter.next()
             global_step = epoch * len(run_dataloader) + i
             batch_data = batch_data.to(self.device[0])
 
@@ -206,7 +226,19 @@ class RefineTrainer(object):
             acc3dRelax_run.append(acc3d_relax)
             acc3dStrict_run.append(acc3d_strict)
 
-            if mode == 'val':
+            remain_iter = max_iter - i
+            iter_time.update(time.time() - end)
+            end = time.time()
+            running_time = iter_time.sum
+            t_mr, t_sr = divmod(running_time, 60)
+            t_hr, t_mr = divmod(t_mr, 60)
+            running_time = '{:02d}:{:02d}:{:02d}'.format(int(t_hr), int(t_mr), int(t_sr))
+            remain_time = remain_iter * iter_time.avg
+            t_m, t_s = divmod(remain_time, 60)
+            t_h, t_m = divmod(t_m, 60)
+            remain_time = '{:02d}:{:02d}:{:02d}'.format(int(t_h), int(t_m), int(t_s))
+
+            if mode == 'val' and self.args.local_rank == 0:
                 self.summary_writer.add_scalar(
                     tag='Val/Loss',
                     scalar_value=np.array(loss_run).mean(),
@@ -233,19 +265,19 @@ class RefineTrainer(object):
                     global_step=global_step
                 )
 
-            run_progress.set_description(
-                run_logstr +
-                ' Epoch {}: Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
+            if self.args.local_rank == 0:
+                print(run_logstr + ' Epoch {}: Iter: {}/{} Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Running {} Remain: {}'.format(
                     epoch,
+                    i, max_iter,
                     np.array(loss_run).mean(),
                     np.array(epe_run).mean(),
                     np.array(outlier_run).mean(),
                     np.array(acc3dRelax_run).mean(),
-                    np.array(acc3dStrict_run).mean()
+                    np.array(acc3dStrict_run).mean(),
+                    running_time, remain_time),
                 )
-            )
 
-        if mode == 'val':
+        if mode == 'val' and self.args.local_rank == 0:
             if np.array(epe_run).mean() < self.best_val_epe:
                 self.best_val_epe = np.array(epe_run).mean()
                 save_checkpoint(self.model, self.args, epoch, 'val')
@@ -259,7 +291,7 @@ class RefineTrainer(object):
                     np.array(acc3dStrict_run).mean()
                 ))
             logging.info('Best EPE: {:.5f}'.format(self.best_val_epe))
-        if mode == 'test':
+        if mode == 'test' and self.args.local_rank == 0:
             print('Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
                 np.array(epe_run).mean(),
                 np.array(outlier_run).mean(),
