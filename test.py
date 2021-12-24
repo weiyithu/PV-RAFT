@@ -152,7 +152,8 @@ def testing(args):
         remain_time = '{:02d}:{:02d}:{:02d}'.format(int(t_h), int(t_m), int(t_s))
 
         if args.local_rank == 0:
-            print('Testing: Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Running: {} Remain: {}'.format(
+            print('Testing {}/{}: Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Running: {} Remain: {}'.format(
+                i, max_iter,
                 np.array(loss_test).mean(),
                 np.array(epe_test).mean(),
                 np.array(outlier_test).mean(),
