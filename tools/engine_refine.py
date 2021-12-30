@@ -60,9 +60,6 @@ class RefineTrainer(object):
         self.begin_epoch = 1
         self._load_weights()
 
-        if torch.cuda.device_count() > 1:
-            self.model = nn.DataParallel(self.model, device_ids=self.device)
-
         if self.begin_epoch > 0:
             for _ in range(self.begin_epoch):
                 self.lr_scheduler.step()
@@ -104,8 +101,11 @@ class RefineTrainer(object):
         if self.args.weights is not None:
             weight_path = os.path.join(self.root, 'experiments', self.args.weights, 'checkpoints', 'best_checkpoint.params')
             if os.path.exists(weight_path):
-                checkpoint = torch.load(weight_path)
-                self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+                checkpoint = torch.load(weight_path, map_location=torch.device("cpu"))
+                if torch.cuda.device_count() > 1:
+                    self.model.module.load_state_dict(checkpoint['state_dict'], strict=False)
+                else:
+                    self.model.load_state_dict(checkpoint['state_dict'], strict=False)
                 print("Load checkpoint from {}".format(weight_path))
             else:
                 raise RuntimeError(f"=> No checkpoint found at '{self.args.weights}")
@@ -113,7 +113,7 @@ class RefineTrainer(object):
             weight_path = os.path.join(self.root, 'experiments', self.args.exp_path, 'checkpoints',
                                        'best_checkpoint.params')
             if os.path.exists(weight_path):
-                checkpoint = torch.load(weight_path)
+                checkpoint = torch.load(weight_path, map_location=torch.device("cpu"))
                 if torch.cuda.device_count() > 1:
                     self.model.module.load_state_dict(checkpoint['state_dict'])
                 else:
@@ -137,10 +137,10 @@ class RefineTrainer(object):
         for i in range(max_iter):
             batch_data = data_iter.next()
             global_step = epoch * len(self.train_dataloader) + i
-            batch_data = batch_data.to(self.device[0])
+            batch_data = batch_data.to('cuda')
 
             self.optimizer.zero_grad()
-            est_flow = self.model(batch_data["sequence"], num_iters=self.args.iters)
+            est_flow = self.model(batch_data, num_iters=self.args.iters)
             loss = compute_loss(est_flow, batch_data)
             loss.backward()
             self.optimizer.step()
@@ -184,7 +184,7 @@ class RefineTrainer(object):
 
         self.lr_scheduler.step()
         if self.args.local_rank == 0:
-            save_checkpoint(self.model, self.args, epoch, 'train')
+            save_checkpoint(self.model, self.args, self.optimizer, epoch, 'train')
             logging.info('Train Epoch {}: Loss: {:.5f} EPE: {:.5f}'.format(
                         epoch,
                         np.array(loss_train).mean(),
@@ -213,10 +213,10 @@ class RefineTrainer(object):
         for i in range(max_iter):
             batch_data = data_iter.next()
             global_step = epoch * len(run_dataloader) + i
-            batch_data = batch_data.to(self.device[0])
+            batch_data = batch_data.to('cuda')
 
             with torch.no_grad():
-                est_flow = self.model(batch_data["sequence"], self.args.iters)
+                est_flow = self.model(batch_data, self.args.iters)
 
             loss = compute_loss(est_flow, batch_data)
             epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow, batch_data)
@@ -280,7 +280,7 @@ class RefineTrainer(object):
         if mode == 'val' and self.args.local_rank == 0:
             if np.array(epe_run).mean() < self.best_val_epe:
                 self.best_val_epe = np.array(epe_run).mean()
-                save_checkpoint(self.model, self.args, epoch, 'val')
+                save_checkpoint(self.model, self.args, self.optimizer, epoch, 'val')
             logging.info(
                 'Val Epoch {}: Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
                     epoch,

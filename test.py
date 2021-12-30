@@ -66,6 +66,8 @@ def testing(args):
     log_dir = os.path.join(args.root, 'experiments', args.exp_path, 'logs')
     log_name = 'TestAlone_' + args.dataset + '.log'
     
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
     logging.basicConfig(
         filename=os.path.join(log_dir, log_name),
         filemode='w',

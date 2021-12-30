@@ -100,7 +100,7 @@ class Trainer(object):
         if self.args.weights is not None:
             if os.path.exists(self.args.weights):
                 weight_path = os.path.join(self.root, 'experiments', self.args.weights)
-                checkpoint = torch.load(weight_path)
+                checkpoint = torch.load(weight_path, map_location=torch.device("cpu"))
                 self.begin_epoch = checkpoint['epoch']
                 self.model.load_state_dict(checkpoint['state_dict'])
                 print("Load checkpoint from {}".format(weight_path))
@@ -110,7 +110,7 @@ class Trainer(object):
             weight_path = os.path.join(self.root, 'experiments', self.args.exp_path, 'checkpoints',
                                        'best_checkpoint.params')
             if os.path.exists(weight_path):
-                checkpoint = torch.load(weight_path)
+                checkpoint = torch.load(weight_path, map_location=torch.device("cpu"))
                 if torch.cuda.device_count() > 1:
                     self.model.module.load_state_dict(checkpoint['state_dict'])
                 else:
@@ -184,7 +184,7 @@ class Trainer(object):
 
         self.lr_scheduler.step()
         if self.args.local_rank == 0:
-            save_checkpoint(self.model, self.args, epoch, 'train')
+            save_checkpoint(self.model, self.args, self.optimizer, epoch, 'train')
             logging.info('Train Epoch {}: Loss: {:.5f} EPE: {:.5f}'.format(
                         epoch,
                         np.array(loss_train).mean(),
@@ -280,7 +280,7 @@ class Trainer(object):
         if mode == 'val' and self.args.local_rank == 0:
             if np.array(epe_run).mean() < self.best_val_epe:
                 self.best_val_epe = np.array(epe_run).mean()
-                save_checkpoint(self.model, self.args, epoch, 'val')
+                save_checkpoint(self.model, self.args, self.optimizer, epoch, 'val')
             logging.info(
                 'Val Epoch {}: Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
                     epoch,
