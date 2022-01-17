@@ -2,11 +2,10 @@ import torch
 import torch.nn as nn
 
 from MinkowskiEngine import SparseTensor
-from model.extractor import FlotEncoder
+from model.extractor import FlotEncoder, FlotTiny
 from model.minkowski.res16unet import Res16UNet34C
 from model.corr import CorrBlock
 from model.update import UpdateBlock
-from model.refine import FlotRefine
 
 
 class RSF(nn.Module):
@@ -15,6 +14,7 @@ class RSF(nn.Module):
         self.hidden_dim = 64
         self.context_dim = 64
         self.feature_extractor = Res16UNet34C(in_channels=3, out_channels=512, config=args)
+        self.feature_mlp = FlotTiny()
         self.context_extractor = FlotEncoder()
         self.corr_block = CorrBlock(num_levels=args.corr_levels, base_scale=args.base_scales,
                                     resolution=3, truncate_k=args.truncate_k)
@@ -37,8 +37,12 @@ class RSF(nn.Module):
         fmap1 = torch.cat(fmap1, dim=0)
         fmap2 = torch.cat(fmap2, dim=0)
 
+        fmap1_point = fmap1 + self.feature_mlp(xyz1)
+        fmap2_point = fmap2 + self.feature_mlp(xyz2)
+
         # correlation matrix
-        self.corr_block.init_module(fmap1, fmap2, xyz2)
+        self.corr_block.init_module(fmap1, fmap2, xyz2, mode='voxel')
+        self.corr_block.init_module(fmap1_point, fmap2_point, xyz2, mode='point')
 
         fct1, graph_context = self.context_extractor(p['sequence'][0])
 

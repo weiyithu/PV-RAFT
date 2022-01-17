@@ -4,7 +4,7 @@ import time
 import torch
 
 
-def save_checkpoint(model, args, optimizer, epoch, mode='train'):
+def save_checkpoint(model, args, optimizer, scheduler, best_epe, epoch, mode='train'):
     if mode == 'train':
         if epoch % args.checkpoint_interval != 0:
             checkpoint_name = 'last_checkpoint.params'
@@ -21,12 +21,16 @@ def save_checkpoint(model, args, optimizer, epoch, mode='train'):
         states = {
             'epoch': epoch,
             'opt': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            'best_epe': best_epe,
             'state_dict': model.module.state_dict(),
         }
     else:
         states = {
             'epoch': epoch,
             'opt': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            'best_epe': best_epe,
             'state_dict': model.state_dict(),
         }
     torch.save(states, checkpoint_path)

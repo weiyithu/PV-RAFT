@@ -49,21 +49,28 @@ class CorrBlock(nn.Module):
 
         self.knn_out = nn.Conv1d(64, 64, 1)
 
-    def init_module(self, fmap1, fmap2, xyz2):
+    def init_module(self, fmap1, fmap2, xyz2, mode='voxel'):
         b, n_p, _ = xyz2.size()
         xyz2 = xyz2.view(b, 1, n_p, 3).expand(b, n_p, n_p, 3)
 
         corr = self.calculate_corr(fmap1, fmap2)
 
         corr_topk = torch.topk(corr.clone(), k=self.truncate_k, dim=2, sorted=True)
-        self.truncated_corr = corr_topk.values
+        if mode == 'voxel':
+            self.truncated_corr = corr_topk.values
+        elif mode == 'point':
+            self.truncated_corr_point = corr_topk.values
         indx = corr_topk.indices.reshape(b, n_p, self.truncate_k, 1).expand(b, n_p, self.truncate_k, 3)
-        self.ones_matrix = torch.ones_like(self.truncated_corr)
-        # num = self.resolution ** 3
-        # b, n1, n2 = self.truncated_corr.shape
-        # self.ones_matrix = torch.ones_like(self.truncated_corr).unsqueeze(dim=0).expand((num, b, n1, n2)).view(num*b, n1, n2)
-        
-        self.truncate_xyz2 = torch.gather(xyz2, dim=2, index=indx)  # b, n_p1, k, 3
+        if mode == 'voxel':
+            self.ones_matrix = torch.ones_like(self.truncated_corr)
+            # num = self.resolution ** 3
+            # b, n1, n2 = self.truncated_corr.shape
+            # self.ones_matrix = torch.ones_like(self.truncated_corr).unsqueeze(dim=0).expand((num, b, n1, n2)).view(num*b, n1, n2)
+            
+            self.truncate_xyz2 = torch.gather(xyz2, dim=2, index=indx)  # b, n_p1, k, 3
+        elif mode == 'point':
+            self.ones_matrix_point = torch.ones_like(self.truncated_corr_point)
+            self.truncate_xyz2_point = torch.gather(xyz2, dim=2, index=indx)
 
     def __call__(self, coords):
         return self.get_voxel_feature(coords) + self.get_knn_feature(coords)
@@ -204,17 +211,17 @@ class CorrBlock(nn.Module):
     def get_knn_feature(self, coords):
         b, n_p, _ = coords.size()
 
-        dist = self.truncate_xyz2 - coords.view(b, n_p, 1, 3)
+        dist = self.truncate_xyz2_point - coords.view(b, n_p, 1, 3)
         dist = torch.sum(dist ** 2, dim=-1)     # b, 8192, 512
 
         neighbors = torch.topk(-dist, k=self.knn, dim=2).indices
 
         b, n_p, _ = coords.size()
-        knn_corr = torch.gather(self.truncated_corr.view(b * n_p, self.truncate_k), dim=1,
+        knn_corr = torch.gather(self.truncated_corr_point.view(b * n_p, self.truncate_k), dim=1,
                                 index=neighbors.reshape(b * n_p, self.knn)).reshape(b, 1, n_p, self.knn)
 
         neighbors = neighbors.view(b, n_p, self.knn, 1).expand(b, n_p, self.knn, 3)
-        knn_xyz = torch.gather(self.truncate_xyz2, dim=2, index=neighbors).permute(0, 3, 1, 2).contiguous()
+        knn_xyz = torch.gather(self.truncate_xyz2_point, dim=2, index=neighbors).permute(0, 3, 1, 2).contiguous()
         knn_xyz = knn_xyz - coords.transpose(1, 2).reshape(b, 3, n_p, 1)
 
         knn_feature = self.knn_conv(torch.cat([knn_corr, knn_xyz], dim=1))

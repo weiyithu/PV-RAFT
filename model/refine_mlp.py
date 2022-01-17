@@ -24,10 +24,10 @@ class FlotRefine(nn.Module):
 class MLPConv(nn.Module):
     """Very simple multi-layer perceptron (also called FFN)"""
 
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, norm_layer=nn.BatchNorm1d):
+    def __init__(self, input_dim, hidden_dim, output_dim, norm_layer=nn.BatchNorm1d):
         super().__init__()
-        self.num_layers = num_layers
-        h = [hidden_dim] * (num_layers - 1)
+        self.num_layers = len(hidden_dim) + 1
+        h = hidden_dim
         self.layers = nn.ModuleList(
             nn.Conv1d(n, k, 1) for n, k in zip([input_dim] + h, h + [output_dim])
         )
