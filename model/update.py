@@ -54,6 +54,27 @@ class ConvRNN(nn.Module):
         return h
 
 
+class DropHead(nn.Module):
+    def __init__(self, input_dim=64):
+        super(DropHead, self).__init__()
+        self.conv1 = nn.Conv1d(input_dim, 32, 1)
+        self.conv2 = nn.Conv1d(input_dim, 32, 1)
+        self.setconv = SetConv(32, 32)
+        self.out_conv = nn.Sequential(
+            nn.Conv1d(64, 32, 1),
+            nn.ReLU(),
+            nn.Conv1d(32, 1, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, graph):
+        out = self.conv1(x)
+        x = self.conv2(x)
+        out_setconv = self.setconv(x.transpose(1, 2).contiguous(), graph).transpose(1, 2).contiguous()
+        out = self.out_conv(torch.cat([out_setconv, out], dim=1))
+        return out
+
+
 class FlowHead(nn.Module):
     def __init__(self, input_dim=128):
         super(FlowHead, self).__init__()
@@ -77,13 +98,13 @@ class UpdateBlock(nn.Module):
         super(UpdateBlock, self).__init__()
         self.motion_encoder = MotionEncoder()
         self.gru = ConvGRU(input_dim=input_dim, hidden_dim=hidden_dim)
-        # self.rnn = ConvRNN(input_dim=input_dim, hidden_dim=hidden_dim)
+        self.drop_head = DropHead(input_dim=hidden_dim)
         self.flow_head = FlowHead(input_dim=hidden_dim)
 
     def forward(self, net, inp, corr, flow, graph):
         motion_features = self.motion_encoder(flow, corr)
         inp = torch.cat([inp, motion_features], dim=1)  # 128d
         net = self.gru(net, inp)
-        # net = self.rnn(net, inp)
+        drop_conf = self.drop_head(net.detach(), graph).squeeze(dim=1)
         delta_flow = self.flow_head(net, graph).transpose(1, 2).contiguous()
-        return net, delta_flow
+        return net, delta_flow, drop_conf

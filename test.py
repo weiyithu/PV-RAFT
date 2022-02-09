@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--truncate_k', default=512, type=int)
     parser.add_argument('--iters', default=8, type=int)
     parser.add_argument('--gamma', default=0.8, type=float)
+    parser.add_argument('--drop_thresh', default=0.95, type=float)
 
     parser.add_argument('--bn_momentum', default=0.02, type=float)
     parser.add_argument('--conv1_kernel_size', default=5, type=int)
@@ -115,7 +116,6 @@ def testing(args):
 
     model.eval()
     iter_time = AverageMeter()
-    loss_test = []
     epe_test = []
     outlier_test = []
     acc3dRelax_test = []
@@ -127,15 +127,9 @@ def testing(args):
         batch_data = data_iter.next()
         batch_data = batch_data.to('cuda')
         with torch.no_grad():
-            est_flow = model(batch_data, 32)
-        if not args.refine:
-            loss = sequence_loss(est_flow, batch_data)
-            epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow[-1], batch_data)
-        else:
-            loss = compute_loss(est_flow, batch_data)
+            est_flow = model(p=batch_data, gt=None, num_iters=args.iters, drop_thresh=args.drop_thresh)
             epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow, batch_data)
 
-        loss_test.append(loss.cpu())
         epe_test.append(epe)
         outlier_test.append(outlier)
         acc3dRelax_test.append(acc3d_relax)
@@ -154,30 +148,31 @@ def testing(args):
         remain_time = '{:02d}:{:02d}:{:02d}'.format(int(t_h), int(t_m), int(t_s))
 
         if args.local_rank == 0:
-            print('Testing {}/{}: Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Running: {} Remain: {}'.format(
+            print('Testing {}/{}: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Running: {} Remain: {} Th:{:.2f}'.format(
                 i, max_iter,
-                np.array(loss_test).mean(),
                 np.array(epe_test).mean(),
                 np.array(outlier_test).mean(),
                 np.array(acc3dRelax_test).mean(),
                 np.array(acc3dStrict_test).mean(),
-                running_time, remain_time
+                running_time, remain_time, args.drop_thresh
             )
         )
 
     if args.local_rank == 0:
-        print('Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
+        print('Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Th:{:.2f}'.format(
             np.array(epe_test).mean(),
             np.array(outlier_test).mean(),
             np.array(acc3dRelax_test).mean(),
-            np.array(acc3dStrict_test).mean()
+            np.array(acc3dStrict_test).mean(),
+            args.drop_thresh
         ))
         logging.info(
-            'Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
+            'Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Th:{:.2f}'.format(
                 np.array(epe_test).mean(),
                 np.array(outlier_test).mean(),
                 np.array(acc3dRelax_test).mean(),
-                np.array(acc3dStrict_test).mean()
+                np.array(acc3dStrict_test).mean(),
+                args.drop_thresh
             ))
 
 

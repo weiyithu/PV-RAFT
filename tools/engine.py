@@ -60,6 +60,10 @@ class Trainer(object):
         self.best_val_epe = 10
         self._load_weights()
 
+        self.drop_thresh_list = np.concatenate(
+            (np.ones((0,)) * 0.8, np.linspace(0.8, 0.95, 10), np.ones((10,)) * 0.95)
+        )
+
         if self.begin_epoch > 0:
             for _ in range(self.begin_epoch):
                 self.lr_scheduler.step()
@@ -128,7 +132,11 @@ class Trainer(object):
             self.summary_writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
 
         loss_train = []
+        loss_flow_train = []
+        loss_drop_train = []
         epe_train = []
+        drop_thresh_epoch = self.drop_thresh_list[epoch-1]
+
         end = time.time()
         max_iter = len(self.train_dataloader)
         data_iter = self.train_dataloader.__iter__()
@@ -142,13 +150,17 @@ class Trainer(object):
             #     est_flow = self.model(batch_data["sequence"], num_iters=self.args.iters)
             # print(prof.key_averages().table(sort_by="self_cuda_time_total"))
             # exit(0)
-            est_flow = self.model(batch_data, num_iters=self.args.iters)
-            loss = sequence_loss(est_flow, batch_data, gamma=self.args.gamma)
+            est_flow, loss_flow, loss_drop = self.model(p=batch_data, gt=batch_data['ground_truth'], num_iters=self.args.iters, drop_thresh=drop_thresh_epoch)
+            loss_flow = loss_flow.mean()
+            loss_drop = loss_drop.mean()
+            loss = loss_flow + loss_drop
             loss.backward()
             self.optimizer.step()
 
             epe = compute_epe_train(est_flow[-1], batch_data)
             loss_train.append(loss.detach().cpu())
+            loss_flow_train.append(loss_flow.detach().cpu())
+            loss_drop_train.append(loss_drop.detach().cpu())
             epe_train.append(epe.detach().cpu())
 
             remain_iter = max_iter - i
@@ -176,31 +188,36 @@ class Trainer(object):
                 )
 
             if self.args.local_rank == 0:
-                print('Train Epoch {}: Iter: {}/{} Loss: {:.5f} EPE: {:.5f} Running: {} Remain: {}'.format(
+                print('Train Epoch {}: Iter: {}/{} Loss: {:.5f} Loss_flow: {:.5f} Loss_drop: {:.5f} EPE: {:.5f} Running: {} Remain: {} Th: {:.2f}'.format(
                     epoch,
                     i, max_iter,
                     np.array(loss_train).mean(),
+                    np.array(loss_flow_train).mean(),
+                    np.array(loss_drop_train).mean(),
                     np.array(epe_train).mean(),
-                    running_time, remain_time)
+                    running_time, remain_time, drop_thresh_epoch)
                 )
 
         self.lr_scheduler.step()
         if self.args.local_rank == 0:
             save_checkpoint(self.model, self.args, self.optimizer, self.lr_scheduler, self.best_val_epe, epoch, 'train')
-            logging.info('Train Epoch {}: Loss: {:.5f} EPE: {:.5f}'.format(
+            logging.info('Train Epoch {}: Loss: {:.5f} Loss_flow: {:.5f} Loss_drop: {:.5f} EPE: {:.5f} Th: {:.2f}'.format(
                         epoch,
                         np.array(loss_train).mean(),
-                        np.array(epe_train).mean()
+                        np.array(loss_flow_train).mean(),
+                        np.array(loss_drop_train).mean(),
+                        np.array(epe_train).mean(),
+                        drop_thresh_epoch
                     ))
 
     def val_test(self, epoch=0, mode='val'):
         self.model.eval()
         iter_time = AverageMeter()
-        loss_run = []
         epe_run = []
         outlier_run = []
         acc3dRelax_run = []
         acc3dStrict_run = []
+        drop_thresh_epoch = self.drop_thresh_list[epoch-1] if mode == 'val' else self.drop_thresh_list[-1]
 
         if mode == 'val':
             run_dataloader = self.val_dataloader
@@ -218,11 +235,9 @@ class Trainer(object):
             batch_data = batch_data.to(self.model.device)
 
             with torch.no_grad():
-                est_flow = self.model(batch_data, 32)
+                est_flow = self.model(p=batch_data, gt=None, num_iters=32, drop_thresh=drop_thresh_epoch)
 
-            loss = sequence_loss(est_flow, batch_data, gamma=self.args.gamma)
-            epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow[-1], batch_data)
-            loss_run.append(loss.cpu())
+            epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow, batch_data)
             epe_run.append(epe)
             outlier_run.append(outlier)
             acc3dRelax_run.append(acc3d_relax)
@@ -241,11 +256,6 @@ class Trainer(object):
             remain_time = '{:02d}:{:02d}:{:02d}'.format(int(t_h), int(t_m), int(t_s))
 
             if mode == 'val' and self.args.local_rank == 0:
-                self.summary_writer.add_scalar(
-                    tag='Val/Loss',
-                    scalar_value=np.array(loss_run).mean(),
-                    global_step=global_step
-                )
                 self.summary_writer.add_scalar(
                     tag='Val/EPE',
                     scalar_value=np.array(epe_run).mean(),
@@ -268,15 +278,14 @@ class Trainer(object):
                 )
 
             if self.args.local_rank == 0:
-                print(run_logstr + ' Epoch {}: Iter: {}/{} Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Running {} Remain: {}'.format(
+                print(run_logstr + ' Epoch {}: Iter: {}/{} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Running {} Remain: {} Th: {:.2f}'.format(
                     epoch,
                     i, max_iter,
-                    np.array(loss_run).mean(),
                     np.array(epe_run).mean(),
                     np.array(outlier_run).mean(),
                     np.array(acc3dRelax_run).mean(),
                     np.array(acc3dStrict_run).mean(),
-                    running_time, remain_time),
+                    running_time, remain_time, drop_thresh_epoch),
                 )
 
         if mode == 'val' and self.args.local_rank == 0:
@@ -284,28 +293,30 @@ class Trainer(object):
                 self.best_val_epe = np.array(epe_run).mean()
                 save_checkpoint(self.model, self.args, self.optimizer, self.lr_scheduler, self.best_val_epe, epoch, 'val')
             logging.info(
-                'Val Epoch {}: Loss: {:.5f} EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
+                'Val Epoch {}: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Th: {:.2f}'.format(
                     epoch,
-                    np.array(loss_run).mean(),
                     np.array(epe_run).mean(),
                     np.array(outlier_run).mean(),
                     np.array(acc3dRelax_run).mean(),
-                    np.array(acc3dStrict_run).mean()
+                    np.array(acc3dStrict_run).mean(),
+                    drop_thresh_epoch
                 ))
             logging.info('Best EPE: {:.5f}'.format(self.best_val_epe))
         if mode == 'test' and self.args.local_rank == 0:
-            print('Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
+            print('Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Th: {:.2f}'.format(
                 np.array(epe_run).mean(),
                 np.array(outlier_run).mean(),
                 np.array(acc3dRelax_run).mean(),
-                np.array(acc3dStrict_run).mean()
+                np.array(acc3dStrict_run).mean(),
+                drop_thresh_epoch
             ))
             logging.info(
-                'Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f}'.format(
+                'Test Result: EPE: {:.5f} Outlier: {:.5f} Acc3dRelax: {:.5f} Acc3dStrict: {:.5f} Th: {:.2f}'.format(
                     np.array(epe_run).mean(),
                     np.array(outlier_run).mean(),
                     np.array(acc3dRelax_run).mean(),
-                    np.array(acc3dStrict_run).mean()
+                    np.array(acc3dStrict_run).mean(),
+                    drop_thresh_epoch
             ))
 
 
