@@ -4,7 +4,7 @@ from .generic import SceneFlowDataset
 
 
 class Kitti(SceneFlowDataset):
-    def __init__(self, root_dir, nb_points):
+    def __init__(self, root_dir, nb_points, voxel_size=0.05):
         """
         Construct the KITTI scene flow datatset as in:
         Gu, X., Wang, Y., Wu, C., Lee, Y.J., Wang, P., HPLFlowNet: Hierarchical
@@ -21,7 +21,7 @@ class Kitti(SceneFlowDataset):
 
         """
 
-        super(Kitti, self).__init__(nb_points)
+        super(Kitti, self).__init__(nb_points, voxel_size)
         self.root_dir = root_dir
         self.paths = self.make_dataset()
 
