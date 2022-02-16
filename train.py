@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument('--truncate_k', default=512, type=int)
     parser.add_argument('--iters', default=8, type=int)
     parser.add_argument('--gamma', default=0.8, type=float)
+    parser.add_argument('--drop_thresh', default=0.95, type=float)
 
     parser.add_argument('--bn_momentum', default=0.02, type=float)
     parser.add_argument('--conv1_kernel_size', default=5, type=int)
