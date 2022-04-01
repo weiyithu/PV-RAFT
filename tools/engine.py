@@ -235,7 +235,7 @@ class Trainer(object):
             batch_data = batch_data.to(self.model.device)
 
             with torch.no_grad():
-                est_flow = self.model(p=batch_data, gt=None, num_iters=32, drop_thresh=drop_thresh_epoch)
+                est_flow = self.model(p=batch_data, gt=None, num_iters=self.args.iters, drop_thresh=drop_thresh_epoch)
 
             epe, acc3d_strict, acc3d_relax, outlier = compute_epe(est_flow, batch_data)
             epe_run.append(epe)
