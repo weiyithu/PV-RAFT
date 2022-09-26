@@ -78,7 +78,7 @@ python test.py --refine --dataset=KITTI --exp_path=pv_raft_refine --gpus=1 --max
 ```
 
 ### Reproduce results
-You can download the checkpoint of stage1 model [here](https://drive.google.com/file/d/1P3HCoFJ6wFLPHZPSHOSJKMaPLFjprQyZ/view?usp=sharing) and refined model [here](https://drive.google.com/file/d/1EbEt9Q55WYNTuly3SJnGRUwrpHrzfion/view?usp=sharing).
+You can download the checkpoint of stage1 model [here](https://drive.google.com/file/d/1cvOqgInkQOzMWUqyxitV39FNcJ7VJuJW/view?usp=sharing) and refined model [here](https://drive.google.com/file/d/1lFXPIaJ7gep6Usn-1tCKJF6wgPXPsTO3/view?usp=sharing).
 
 ## Acknowledgement
 Our code is based on [FLOT](https://github.com/valeoai/FLOT). We also refer to [RAFT](https://github.com/princeton-vl/RAFT) and [HPLFlowNet](https://github.com/laoreja/HPLFlowNet).
