@@ -112,7 +112,7 @@ def testing(args):
         raise NotImplementedError
     test_dataloader = DataLoader(dataset=test_dataset, batch_size=1, num_workers=8,
                                  collate_fn=Batch, drop_last=False,
-                                 sampler=DistributedInfSampler(test_dataset, shuffle=False))
+                                 sampler=None)
 
     model.eval()
     iter_time = AverageMeter()
