@@ -1,5 +1,10 @@
 PV-RAFT
 ===
+
+🔥🔥🔥 2023.7 NEWS: The extended version of PV-RAFT has been accepted by **TPAMI 2023**! Checkout `dpvraft` branch to see our newest DPV-RAFT version!
+
+------
+
 This repository contains the PyTorch implementation for paper "PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds" (CVPR 2021)\[[arXiv](https://arxiv.org/abs/2012.00987)\]
 
 <img src="PV_RAFT.png" width='600'>
