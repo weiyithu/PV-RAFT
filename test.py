@@ -16,8 +16,7 @@ from datasets.generic import Batch
 from datasets.flyingthings3d_hplflownet import FT3D
 from datasets.kitti_hplflownet import Kitti
 from datasets.dataloader import DistributedInfSampler
-from model.RAFTSceneFlow import RSF
-from model.RAFTSceneFlowRefine import RSF_refine
+from model.dpv_raft import DPV_RAFT
 from tools.loss import sequence_loss, compute_loss
 from tools.metric import compute_epe
 from tools.utils import AverageMeter
@@ -46,7 +45,6 @@ def parse_args():
     parser.add_argument('--batch_size', default=1, type=int)
     parser.add_argument('--gpus', default='0', type=str)
     parser.add_argument('--weights', default=None, type=str)
-    parser.add_argument('--refine', action='store_true')
 
     parser.add_argument('--local_rank', default=0, type=int)
     args = parser.parse_args()
@@ -78,10 +76,7 @@ def testing(args):
     warnings.filterwarnings('ignore')
     logging.info(args)
 
-    if not args.refine:
-        model = RSF(args)
-    else:
-        model = RSF_refine(args)
+    model = DPV_RAFT(args)
     model = DDP(
         model.cuda(), device_ids=[args.local_rank], output_device=args.local_rank,
         broadcast_buffers=False, find_unused_parameters=True

@@ -9,9 +9,9 @@ from model.corr import CorrBlock
 from model.update import UpdateBlock
 
 
-class RSF(nn.Module):
+class DPV_RAFT(nn.Module):
     def __init__(self, args):
-        super(RSF, self).__init__()
+        super(DPV_RAFT, self).__init__()
         self.hidden_dim = 64
         self.context_dim = 64
         self.gamma = 0.8
@@ -21,7 +21,6 @@ class RSF(nn.Module):
         self.corr_block = CorrBlock(num_levels=args.corr_levels, base_scale=args.base_scales,
                                     resolution=3, truncate_k=args.truncate_k)
         self.update_block = UpdateBlock(hidden_dim=self.hidden_dim)
-        # self.refine_block = FlotRefine()
 
     def forward(self, p, gt=None, num_iters=12, drop_thresh=0.8):
         # feature extraction
@@ -97,9 +96,6 @@ class RSF(nn.Module):
                 if len(mask.nonzero()) == 0:
                     break
                 coords2[mask] = coords2[mask] + delta_flow[mask]
-                # if len((~mask).nonzero()) != 0: 
-                #     epe, acc3d_strict, acc3d_relax, outlier = self.compute_epe_mask((coords2 - coords1)[~mask], test_gt[1][~mask], test_gt[0][~mask])
-                #     print('Iter {}, Num {}, EPE: {:.5f}, Acc3d_strict: {:.5f}, Acc3d_relax: {:.5f}, Outlier: {:.5f}'.format(itr, len((~mask).nonzero()), epe, acc3d_strict, acc3d_relax, outlier))
             flow_pred_final = coords2 - coords1
             return flow_pred_final
 

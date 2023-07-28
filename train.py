@@ -8,9 +8,7 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tools.engine import Trainer
-from tools.engine_refine import RefineTrainer
-from model.RAFTSceneFlow import RSF
-from model.RAFTSceneFlowRefine import RSF_refine
+from model.dpv_raft import DPV_RAFT
 
 
 def synchronize():
@@ -52,7 +50,6 @@ def parse_args():
     parser.add_argument('--num_epochs', default=20, type=int)
     parser.add_argument('--weights', default=None, type=str)
     parser.add_argument('--checkpoint_interval', default=5, type=int)
-    parser.add_argument('--refine', action='store_true')
 
     parser.add_argument('--local_rank', default=0, type=int)
 
@@ -71,15 +68,7 @@ def main(args):
         )
         synchronize()
 
-    if not args.refine:
-        model = RSF(args)
-    else:
-        model = RSF_refine(args)
-        model.feature_extractor.requires_grad = False
-        model.context_extractor.requires_grad = False
-        model.corr_block.requires_grad = False
-        model.update_block.requires_grad = False
-    
+    model = DPV_RAFT(args)
     model = model.cuda()
 
     ddp_model = DDP(
@@ -88,10 +77,7 @@ def main(args):
     )
     ddp_model = ME.MinkowskiSyncBatchNorm.convert_sync_batchnorm(ddp_model)
 
-    if not args.refine:
-        trainer = Trainer(args, ddp_model)
-    else:
-        trainer = RefineTrainer(args, ddp_model)
+    trainer = Trainer(args, ddp_model)
 
     for epoch in range(trainer.begin_epoch, args.num_epochs + 1):
         trainer.training(epoch)

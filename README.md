@@ -1,6 +1,6 @@
 PV-RAFT
 ===
-This repository contains the PyTorch implementation for paper "PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds" (CVPR 2021)\[[arXiv](https://arxiv.org/abs/2012.00987)\]
+This repository contains the PyTorch implementation for paper "3D Point-Voxel Correlation Fields for Scene Flow Estimation" (TPAMI 2023)\[[IEEE](https://ieeexplore.ieee.org/document/10178057)\]
 
 <img src="PV_RAFT.png" width='600'>
 
@@ -11,7 +11,8 @@ This repository contains the PyTorch implementation for paper "PV-RAFT: Point-Vo
 - PyTorch 1.8
 - torch-scatter
 - CUDA 10.2
-- RTX 2080 Ti
+- 8 * RTX 2080 Ti
+- MinkowskiEngine
 - tqdm, tensorboard, scipy, imageio, png
 
 ```Shell
@@ -20,6 +21,7 @@ conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch
 conda install tqdm tensorboard scipy imageio
 pip install pypng
 pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.8.0+cu102.html
+pip install -U git+https://github.com/NVIDIA/MinkowskiEngine --no-deps
 ```
 
 ## Usage
@@ -53,31 +55,18 @@ You should replace `raw_data_path`, `save_path` and `calib_path` with your own s
 
 ### Train
 ```Shell
-python train.py --exp_path=pv_raft --batch_size=2 --gpus=0,1 --num_epochs=20 --max_points=8192 --iters=8  --root=./
+python -m torch.distributed.launch --nproc_per_node=8 train.py --exp_path=dpv_raft --batch_size=8 --gpus=0,1,2,3,4,5,6,7 --num_epochs=20 --max_points=8192 --iters=8  --root=./
 ```
-where `exp_path` is the experiment folder name and `root` is the project root path. These 20 epochs take about 53 hours on two RTX 2080 Ti.
-
-If you want to train the refine model, please add `--refine` and specify `--weights` parameter as the directory name of the pre-trained model. For example,
-
-```Shell
-python train.py --refine --exp_path=pv_raft_finetune --batch_size=2 --gpus=0,1 --num_epochs=10 --max_points=8192 --iters=32 --root=./ --weights=./experiments/pv_raft/checkpoints/best_checkpoint.params
-```
-These 10 epochs take about 38 hours on two RTX 2080 Ti.
+where `exp_path` is the experiment folder name and `root` is the project root path. 
 
 ### Test
 ```Shell
-python test.py --dataset=KITTI --exp_path=pv_raft --gpus=1 --max_points=8192 --iters=8 --root=./ --weights=./experiments/pv_raft/checkpoints/best_checkpoint.params
+python -m torch.distributed.launch --nproc_per_node=1 python test.py --dataset=KITTI --exp_path=dpv_raft --gpus=0 --max_points=8192 --iters=32 --root=./ --weights=./experiments/dpv_raft/checkpoints/best_checkpoint.params
 ```
-where `dataset` should be chosen from `FT3D/KITTI`, and `weights` is the absolute path of checkpoint file.
-
-If you want to test the refine model, please add `--refine`. For example,
-
-```Shell
-python test.py --refine --dataset=KITTI --exp_path=pv_raft_finetune --gpus=1 --max_points=8192 --iters=32 --root=./ --weights=./experiments/pv_raft_finetune/checkpoints/best_checkpoint.params
-```
+where `dataset` should be chosen from `FT3D/KITTI`, and `weights` is the absolute path of checkpoint file. During testing, we use 32 iterations for KITTI and 8 iterations for FT3D.
 
 ### Reproduce results
-You can download the checkpoint of refined model [here](https://drive.google.com/file/d/11qt_qkuG-G_OJ53Ml4huQpMZkcmhyriK/view?usp=sharing).
+You can download the checkpoint of DPV-RAFT model from [here](https://drive.google.com/file/d/1fpgMjtMP5n41t88C0W8Yi6np9E44VDpR/view?usp=sharing).
 
 ## Acknowledgement
 Our code is based on [FLOT](https://github.com/valeoai/FLOT). We also refer to [RAFT](https://github.com/princeton-vl/RAFT) and [HPLFlowNet](https://github.com/laoreja/HPLFlowNet).
@@ -85,11 +74,12 @@ Our code is based on [FLOT](https://github.com/valeoai/FLOT). We also refer to [
 ## Citation 
 If you find our work useful in your research, please consider citing:
 ```
-@inproceedings{wei2020pv,
-  title={{PV-RAFT: Point-Voxel Correlation Fields for Scene Flow Estimation of Point Clouds}},
-  author={Wei, Yi and Wang, Ziyi and Rao, Yongming and Lu, Jiwen and Zhou, Jie},
-  booktitle={CVPR},
-  year={2021}
+@article{wang2023dpvraft,
+  title={3D Point-Voxel Correlation Fields for Scene Flow Estimation},
+  author={Wang, Ziyi and Wei, Yi and Rao, Yongming and Zhou, Jie and Lu, Jiwen},
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  year={2023},
+  publisher={IEEE}
 }
 ```
 

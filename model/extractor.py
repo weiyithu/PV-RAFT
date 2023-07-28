@@ -1,8 +1,8 @@
 import torch.nn as nn
+import torch.nn.functional as F
 
 from model.flot.gconv import SetConv
 from model.flot.graph import Graph
-from model.refine_mlp import MLPConv
 
 
 class FlotEncoder(nn.Module):
@@ -44,4 +44,24 @@ class FlotTiny(nn.Module):
         x = self.feat_conv3(x, graph)
         x = self.mlp_conv(x.transpose(1, 2).contiguous())
 
+        return x
+
+
+class MLPConv(nn.Module):
+    """Very simple multi-layer perceptron (also called FFN)"""
+
+    def __init__(self, input_dim, hidden_dim, output_dim, norm_layer=nn.BatchNorm1d):
+        super().__init__()
+        self.num_layers = len(hidden_dim) + 1
+        h = hidden_dim
+        self.layers = nn.ModuleList(
+            nn.Conv1d(n, k, 1) for n, k in zip([input_dim] + h, h + [output_dim])
+        )
+        self.norms = nn.ModuleList(
+            norm_layer(k) for k in (h + [output_dim])
+        )
+
+    def forward(self, x):
+        for i, (layer, norm) in enumerate(zip(self.layers, self.norms)):
+            x = F.relu(norm(layer(x))) if i < self.num_layers - 1 else layer(x)
         return x
